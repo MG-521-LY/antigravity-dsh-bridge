@@ -118,6 +118,48 @@ test('unknown token usage and HTTP errors retain request counts without fabricat
   assert.equal(totals.calls, 1); assert.equal(totals.measuredCalls, 0);
 });
 
+test('requested high alias and returned internal model are recorded separately without changing SSE bytes', async (t) => {
+  const dir = temporary(t), ledger = new Ledger(dir); t.after(() => ledger.close());
+  const exchange = createExchange(ledger, () => {}, '/v1/chat/completions', 'POST');
+  const body = JSON.stringify({ model: 'gemini-3.8-flash-high', messages: [{ role: 'user', content: 'PRIVATE_PROMPT_SENTINEL' }] });
+  const sent = []; exchange.input.on('data', chunk => sent.push(chunk));
+  for (const byte of Buffer.from(body)) exchange.input.write(Buffer.from([byte]));
+  exchange.input.end(); await finished(exchange.input);
+  exchange.setContentType('text/event-stream');
+  const wire = 'data: ' + JSON.stringify({ model: 'gemini-3.8-flash-n', choices: [], usage: { prompt_tokens: 20, completion_tokens: 3 } }) + '\n\ndata: [DONE]\n\n';
+  const received = []; exchange.output.on('data', chunk => received.push(chunk));
+  exchange.output.end(wire); await finished(exchange.output); exchange.finish(200);
+  assert.equal(Buffer.concat(sent).toString(), body); assert.equal(Buffer.concat(received).toString(), wire);
+  const record = ledger.records[0];
+  assert.equal(record.model, 'gemini-3.8-flash-high');
+  assert.equal(record.requestedModel, 'gemini-3.8-flash-high');
+  assert.equal(record.responseModel, 'gemini-3.8-flash-n');
+  ledger.flush();
+  const restored = new Ledger(dir); t.after(() => restored.close());
+  assert.equal(restored.records[0].requestedModel, record.requestedModel);
+  assert.equal(restored.records[0].responseModel, record.responseModel);
+  assert(!fs.readFileSync(ledger.file, 'utf8').includes('PRIVATE_PROMPT_SENTINEL'));
+});
+
+test('only the top-level request model is used; legacy records retain their original identity', async (t) => {
+  const dir = temporary(t), file = path.join(dir, 'bridge-usage.json');
+  fs.writeFileSync(file, JSON.stringify({ version: 1, records: [{ time: now, model: 'gemini-3.8-flash-n', provider: 'antigravity', status: 'completed', usageKnown: false }] }));
+  const ledger = new Ledger(dir); t.after(() => ledger.close());
+  assert.equal(ledger.records[0].model, 'gemini-3.8-flash-n');
+  assert.equal(ledger.records[0].requestedModel, null);
+  assert.equal(ledger.records[0].responseModel, null);
+  assert.equal(ledger.records[0].modelIdentityVersion, 0);
+  const exchange = createExchange(ledger, () => {}, '/v1/chat/completions', 'POST');
+  exchange.input.resume();
+  exchange.input.end(JSON.stringify({ metadata: { model: 'decoy' }, messages: [{ content: 'PRIVATE_BODY_SENTINEL' }], model: 'gemini-3.8-flash-high' }));
+  await finished(exchange.input);
+  exchange.output.resume(); exchange.setContentType('application/json');
+  exchange.output.end(JSON.stringify({ model: 'gemini-3.8-flash-n', usage: { prompt_tokens: 10, completion_tokens: 2 } }));
+  await finished(exchange.output); exchange.finish(200);
+  assert.equal(ledger.records[1].model, 'gemini-3.8-flash-high');
+  assert.equal(ledger.records[1].responseModel, 'gemini-3.8-flash-n');
+});
+
 test('dashboard serves real history asynchronously, rejects cross-origin access, and cannot start backend', async (t) => {
   const dir = temporary(t), home = path.join(dir, 'home'), session = path.join(home, 'sessions', 'project', 'one');
   fs.mkdirSync(session, { recursive: true });

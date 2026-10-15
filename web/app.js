@@ -89,7 +89,10 @@ function renderRecent(data) {
     const clock = time.toLocaleTimeString('zh-CN', { timeZone: state.data.timeZone, hour12: false });
     const input = row.usageKnown ? compact((row.inputTokens || 0) + (row.cacheReadTokens || 0) + (row.cacheWriteTokens || 0)) : '未上报';
     const label = row.sessionTitle || (row.statusCode ? `HTTP ${row.statusCode} · ${row.provider}` : row.provider);
-    return `<tr><td class="time-cell">${clock}<small>${date}</small></td><td class="model-cell"><span class="model-name" title="${escape(row.model)}">${escape(row.model)}</span><span class="model-provider" title="${escape(label)}">${escape(label)}</span></td><td><span class="status ${escape(row.status)}">${labels[row.status] || '未确认'}</span></td><td${row.usageKnown ? '' : ' class="unreported"'}>${input}</td><td class="${row.usageKnown ? 'output-number' : 'unreported'}">${row.usageKnown ? compact(row.outputTokens) : '未上报'}</td><td class="time-cell">${duration(row.durationMs)}</td></tr>`;
+    const identity = state.source !== 'bridge' ? '' : row.modelIdentityVersion === 1
+      ? `返回：${row.responseModel || '未返回模型名'}${row.requestedModel ? '' : ' · 请求名未采集'}`
+      : '旧记录：请求名与返回名未分开保存';
+    return `<tr><td class="time-cell">${clock}<small>${date}</small></td><td class="model-cell"><span class="model-name" title="${escape(row.model)}">${escape(row.model)}</span>${identity ? `<span class="model-provider" title="${escape(identity)}">${escape(identity)}</span>` : ''}<span class="model-provider" title="${escape(label)}">${escape(label)}</span></td><td><span class="status ${escape(row.status)}">${labels[row.status] || '未确认'}</span></td><td${row.usageKnown ? '' : ' class="unreported"'}>${input}</td><td class="${row.usageKnown ? 'output-number' : 'unreported'}">${row.usageKnown ? compact(row.outputTokens) : '未上报'}</td><td class="time-cell">${duration(row.durationMs)}</td></tr>`;
   }).join('') : '<tr><td colspan="6" class="table-empty">暂无符合条件的调用记录</td></tr>';
   $('more-button').hidden = records.length <= state.rows;
   text('recent-note', `当前显示 ${rows.length} 条 · 近期记录最多保留 80 条供查看`);
@@ -99,6 +102,8 @@ function render() {
   if (!state.data) return;
   const data = state.data[state.source], totals = data.totals;
   const isDsh = state.source === 'dsh';
+  text('model-table-note', isDsh ? '未上报 Token 的调用仍计入调用次数。' : '新记录按请求模型统计；旧记录未分别保存请求名与返回名。');
+  text('recent-model-heading', isDsh ? '模型 / 会话' : '请求模型 / 接口返回');
   text('scope-name', isDsh ? 'DSH 全部模型' : '反重力接口');
   text('scope-description', isDsh ? '从本机会话记录读取，覆盖不同提供商' : '只统计经过此本机入口的 API 调用，独立计数');
   text('scope-icon', isDsh ? '▦' : '◈');
