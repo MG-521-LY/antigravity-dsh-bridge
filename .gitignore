@@ -1,0 +1,30 @@
+# Account credentials and local API keys
+/auth/
+/config.yaml
+/config.backend.yaml
+/.env
+/.env.*
+*.pem
+*.key
+
+# Downloaded upstream binaries and archives
+/bin/
+/.downloads/
+*.exe
+*.zip
+
+# Machine paths, state, logs, and live verification output
+/node-path.txt
+/installation-state.json
+/bridge-state.json
+/bridge.log*
+/logs/
+/validation/
+/verification*.json
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

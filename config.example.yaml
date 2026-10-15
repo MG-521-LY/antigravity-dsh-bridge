@@ -1,0 +1,29 @@
+# setup.ps1 generates config.yaml with a random local key and an absolute auth path.
+config-version: 8
+server:
+  host: '127.0.0.1'
+  port: 8317
+  discovery:
+    enabled: false
+management:
+  allow-remote: false
+  secret-key: ''
+  disable-control-panel: true
+access:
+  api-keys:
+    - 'replace-with-a-random-local-key'
+oauth:
+  auth-dir: './auth'
+  providers:
+    antigravity:
+      antigravity-credits: false
+routing:
+  retry:
+    request-retry: 0
+requests:
+  proxy-url: ''
+observability:
+  logs:
+    debug: false
+    request-log: false
+    logs-max-total-size-mb: 10
