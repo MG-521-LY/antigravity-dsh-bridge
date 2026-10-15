@@ -15,12 +15,13 @@ DSH → 本机入口 127.0.0.1:8317 → 按需启动 CLIProxyAPI 127.0.0.1:8318 
 - 多个同时到达的请求共享一次启动；转换服务退出后，下次请求会重新启动。
 - 保留 OpenAI Chat Completions 的流式回复和工具调用格式。
 - 仅监听本机；密钥校验由 CLIProxyAPI 执行，积分回退默认关闭。
+- 内置中文网页用量面板，可分别查看全部 DSH 模型历史与反重力接口请求统计。
 
 首次调用可能需要多等几秒。转换服务启动后保持后台运行；关闭 DSH 不会自动停止它。电脑休眠或关机期间不能处理请求。入口本身若退出，需要重新登录 Windows，或执行 `02-start-api.cmd` 恢复。
 
 ## 安装
 
-需要 Windows 10/11、PowerShell、Node.js 22 或更高版本，以及具备 Antigravity 使用权限的 Google 账号。网络必须能访问 GitHub 和相关 Google 服务。
+需要 Windows 10/11、PowerShell、支持 Zstandard 的 Node.js（22.15+ 或 24 LTS），以及具备 Antigravity 使用权限的 Google 账号。网络必须能访问 GitHub 和相关 Google 服务。
 
 1. 下载或克隆此仓库，放到长期保留的目录。
 2. 在该目录打开 PowerShell，运行：
@@ -61,6 +62,31 @@ DSH → 本机入口 127.0.0.1:8317 → 按需启动 CLIProxyAPI 127.0.0.1:8318 
 
 安装选项：`-NoAutostart` 不注册登录启动项；`-NoStart` 不立即启动入口；`-SkipDownload` 使用已有 `bin/cli-proxy-api.exe`。不要同时运行多套使用相同端口的安装。
 
+## 网页用量面板
+
+启动本机入口后，打开 **[http://127.0.0.1:8317/dashboard/](http://127.0.0.1:8317/dashboard/)**。
+
+面板提供今天、7 天、30 天和全部历史筛选，以及两套独立的统计视图：
+
+- **DSH 全部模型**：只读分析 `$DSH_HOME/sessions`（默认 `~/.dsh/sessions`），覆盖不同提供商。显示 Token、模型步骤、缓存命中率、完整步骤耗时、趋势、模型分布与近期记录。分支继承的历史不重复累计，同一步骤的最终 usage 与流式 usage 只计一次。
+- **反重力接口**：从监控功能启用后记录经过此入口的请求次数、状态、总耗时和提供商已上报的 Token。统计保存在本机 `bridge-usage.json`，最多保留最近 10,000 条请求。
+
+同一次反重力请求可能同时出现在 DSH 与接口视图中，应分别查看。未上报 Token 的调用仍计入次数，显示为“未上报”，不会当作零消耗估算。DSH 的“平均耗时”来自完整步骤边界，可能包含工具执行；接口耗时包含冷启动等待。
+
+DSH 历史由后台 Worker 扫描，每 30 秒检查文件变化，网页每 5 秒刷新。面板读取最高版本的 v2-v4 JSONL/Zstandard 日志，不进行格式迁移或修复。未支持的格式、不完整文件、读取错误和缺失继承边界会明确提示，统计可能因此不完整。打开面板本身不会启动转换服务或调用模型。
+
+**官方剩余额度、套餐余额和实际账单未接入。** 本机 Token 消耗与官方额度是不同信息，不会显示虚构的剩余百分比或费用。统计页可导出当前视图；不读取 `~/.dsh/.credentials.yaml`，不保存提示词、回复正文或 API 密钥。页面仅允许本机同源读取，无外部图表或字体依赖。
+
+`AG_DSH_TIMEZONE` 可配置统计时区，默认 `Asia/Shanghai`。面板的日期筛选按该时区的自然日计算。
+
+已有旧版安装时，在更新后的源码目录执行：
+
+```powershell
+.\update-installed.ps1 -InstallDir 'D:\Apps\antigravity-dsh-bridge'
+```
+
+脚本会备份代码、核对监听进程的身份、确认没有模型请求后更新，并保留原来的 `config.yaml` 与 `auth/`。它会重新启动本机入口并更新登录启动项。可先加 `-WhatIf` 查看计划，不执行更新。不要在模型请求处理中升级。
+
 ## 日常使用与排查
 
 - 正常使用时直接在 DSH 调用，不需要保持 CMD 或 Antigravity 桌面程序打开。
@@ -86,6 +112,8 @@ Remove-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersio
 ```powershell
 node --check .\lazy-api.cjs
 node --check .\verify-lazy-api.cjs
+node --check .\web\app.js
+node --test .\tests\dashboard.test.cjs
 ```
 
 安装并授权后，可在独立本机端口 `8327/8328` 执行真实集成验证：
@@ -94,13 +122,13 @@ node --check .\verify-lazy-api.cjs
 node .\verify-lazy-api.cjs --isolated
 ```
 
-验证覆盖冷启动、并发请求、鉴权、问答、SSE 流式回复、工具调用和后端退出后的恢复。测试会真实调用模型，消耗少量账号额度；结束时关闭自己创建的测试进程，不停止日常使用的接口。模型默认 `gemini-3-flash`，也可通过 `AG_DSH_TEST_MODEL` 指定实际可用的模型。
+验证覆盖冷启动、并发请求、鉴权、问答、SSE 流式回复、工具调用、面板实际记账和后端退出后的恢复。测试会真实调用模型，消耗少量账号额度；结束时关闭自己创建的测试进程，不停止日常使用的接口。模型默认 `gemini-3-flash`，也可通过 `AG_DSH_TEST_MODEL` 指定实际可用的模型。
 
 可通过 `AG_DSH_CONFIG`、`AG_DSH_BACKEND` 环境变量让测试使用本机其他目录的配置和上游程序，无需复制凭据。`AG_DSH_TEST_REPORT` 可指定本地验证报告路径。报告默认生成 `verification.json`，不会提交到仓库。
 
 ## 文件与凭据
 
-公开仓库只包含源代码、安装脚本、示例配置和说明。`config.yaml`、`auth/`、下载的程序、日志、机器路径和测试产物均已在 `.gitignore` 中排除。提交前仍应检查 Git 暂存区，不要使用强制添加命令提交这些文件。
+公开仓库只包含源代码、安装脚本、示例配置和说明。`config.yaml`、`auth/`、`bridge-usage.json`、下载的程序、日志、机器路径和测试产物均已在 `.gitignore` 中排除。提交前仍应检查 Git 暂存区，不要使用强制添加命令提交这些文件。
 
 ## 相关项目
 

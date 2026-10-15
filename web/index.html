@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>DSH Observatory · 本机模型用量</title>
+  <link rel="stylesheet" href="/dashboard/style.css">
+  <script src="/dashboard/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#overview" aria-label="回到总览"><span class="brand-mark">◈</span><span>OBSERVATORY<small>DSH · LOCAL INSIGHTS</small></span></a>
+    <p class="nav-caption">工作台</p>
+    <nav class="navigation" aria-label="主导航">
+      <a class="nav-item selected" href="#overview"><span>▦</span>用量总览</a>
+      <a class="nav-item" href="#models"><span>◉</span>模型分析</a>
+      <a class="nav-item" href="#requests"><span>≋</span>近期调用</a>
+      <a class="nav-item" href="#notes"><span>ⓘ</span>数据说明</a>
+    </nav>
+    <div class="source-nav"><p class="nav-caption">统计范围</p>
+      <button class="source-button active" data-source="dsh"><i class="dot blue"></i>DSH 全部模型<span>01</span></button>
+      <button class="source-button" data-source="bridge"><i class="dot mint"></i>反重力接口<span>02</span></button>
+    </div>
+    <div class="sidebar-bottom"><div class="local-label"><i class="dot mint"></i>数据仅留在本机</div><p>会话只读分析 · 无对话内容上传</p><a href="https://github.com/MG-521-LY/antigravity-dsh-bridge" target="_blank" rel="noreferrer">Antigravity DSH Bridge ↗</a></div>
+  </aside>
+
+  <main id="overview">
+    <header class="page-header"><div><div class="eyebrow"><span class="tiny-cross">+</span> YOUR LOCAL MODEL OBSERVATORY</div><h1>模型用量总览<span class="heading-dot">.</span></h1><p class="subtitle">看清每一次调用，让本机模型用量有迹可循。</p></div>
+      <div class="header-actions"><span class="live-pill"><i class="dot mint"></i>本机连接</span><button class="button" id="export-button" disabled><span>↧</span>导出统计</button></div>
+    </header>
+
+    <section class="toolbar" aria-label="统计控制"><div class="scope-label"><span class="scope-icon" id="scope-icon">▦</span><div><strong id="scope-name">DSH 全部模型</strong><small id="scope-description">从本机会话记录读取，覆盖不同提供商</small></div><button class="icon-button" id="scope-toggle" aria-label="切换 DSH 全部模型与反重力接口统计" title="切换统计范围">⇄</button></div>
+      <div class="toolbar-right"><div class="range-switch" aria-label="时间范围"><button data-range="1">今天</button><button data-range="7" class="active">近 7 天</button><button data-range="30">近 30 天</button><button data-range="all">全部</button></div><button class="icon-button" id="refresh-button" aria-label="刷新统计" title="刷新统计">↻</button></div>
+    </section>
+
+    <div class="notice" id="notice" role="status"><span class="notice-dot"></span><span id="notice-text">正在连接本机统计服务…</span><small id="updated-at">每 5 秒自动刷新</small></div>
+
+    <section class="metrics" aria-label="用量摘要">
+      <article class="metric"><div class="metric-label">已记录 Token<span>↗</span></div><div class="metric-number" id="total-tokens">—</div><div class="metric-foot"><span class="mini-line blue-line"></span><span id="token-detail">输入、缓存与输出的总和</span></div></article>
+      <article class="metric"><div class="metric-label" id="calls-label">模型步骤<span>≋</span></div><div class="metric-number" id="total-calls">—</div><div class="metric-foot"><span class="mini-line amber-line"></span><span id="calls-detail">等待会话统计</span></div></article>
+      <article class="metric"><div class="metric-label">缓存命中率<span>⌁</span></div><div class="metric-number" id="cache-rate">—</div><div class="metric-foot"><span class="mini-line mint-line"></span><span>缓存读取占总输入的比例</span></div></article>
+      <article class="metric"><div class="metric-label">平均耗时<span>◷</span></div><div class="metric-number" id="average-time">—</div><div class="metric-foot"><span class="mini-line lilac-line"></span><span id="latency-detail">基于有时间记录的步骤</span></div></article>
+    </section>
+
+    <section class="chart-grid">
+      <article class="panel trend-panel"><div class="panel-heading"><div><div class="section-number">01 / ACTIVITY</div><h2>Token 使用趋势</h2></div><div class="chart-legend"><span><i class="dot blue"></i>新输入</span><span><i class="dot mint"></i>缓存</span><span><i class="dot amber"></i>输出</span></div></div><div id="trend-chart" class="trend-chart" aria-label="每日 Token 使用柱状图"><div class="empty">正在读取用量记录</div></div><div class="chart-foot"><span id="trend-caption">按本机统计日期汇总</span><span>INPUT + CACHE + OUTPUT</span></div></article>
+      <article class="panel distribution-panel"><div class="panel-heading"><div><div class="section-number">02 / DISTRIBUTION</div><h2>模型用量分布</h2></div><span class="subtle" id="distribution-unit">按 Token</span></div><div class="distribution-chart" id="model-chart"><div class="empty">等待模型数据</div></div><div id="model-legend" class="model-legend"></div></article>
+    </section>
+
+    <section class="source-strip" aria-label="数据与服务状态"><div><span class="strip-icon blue-text">◫</span><span>会话记录<strong id="session-count">—</strong></span></div><div><span class="strip-icon mint-text">◌</span><span>Token 上报覆盖<strong id="coverage">—</strong></span></div><div><span class="strip-icon amber-text">◇</span><span>转换服务<strong id="service-status">待检查</strong></span></div><div><span class="strip-icon muted">⊘</span><span>官方剩余额度<strong>未接入</strong></span></div></section>
+
+    <section class="panel data-panel" id="models"><div class="panel-heading"><div><div class="section-number">03 / MODELS</div><h2>模型明细<span class="count-badge" id="model-count">0</span></h2></div><label class="search-box"><span>⌕</span><input type="search" id="model-search" placeholder="搜索模型或提供商" aria-label="搜索模型或提供商"></label></div><div class="table-scroll"><table><thead><tr><th>模型 / 提供商</th><th>调用</th><th>新输入</th><th>缓存读取</th><th>输出</th><th>总 Token</th><th class="share-column">用量占比</th></tr></thead><tbody id="model-rows"><tr><td colspan="7" class="table-empty">正在加载…</td></tr></tbody></table></div><div class="table-footer"><span id="model-table-note">未上报 Token 的调用仍计入调用次数。</span><span>按总 Token 排序 ↓</span></div></section>
+
+    <section class="panel data-panel" id="requests"><div class="panel-heading"><div><div class="section-number">04 / RECENT CALLS</div><h2>近期调用</h2></div><select id="request-filter" aria-label="筛选调用状态"><option value="all">全部记录</option><option value="failed">失败与中断</option><option value="unmeasured">未上报 Token</option></select></div><div class="table-scroll"><table><thead><tr><th>时间</th><th>模型 / 会话</th><th>状态</th><th>输入（含缓存）</th><th>输出</th><th>耗时</th></tr></thead><tbody id="request-rows"><tr><td colspan="6" class="table-empty">正在加载…</td></tr></tbody></table></div><div class="table-footer"><span id="recent-note">最多显示近期 80 条记录</span><button class="text-button" id="more-button" hidden>显示更多 ↓</button></div></section>
+
+    <section class="notes-grid" id="notes"><article><div class="section-number">ABOUT THE NUMBERS</div><h3>这份账本记录什么？</h3><p>DSH 视图只读分析本机会话，按模型步骤去重，并排除分支继承的历史。反重力视图记录经过此入口的 API 调用。同一次请求可能出现在两个视图中，请分别查看。</p></article><article><h3>用量与额度，分别查看</h3><p>Token 统计取自已上报的数据；“未上报”不等于零消耗。官方套餐余额、计费金额和剩余限额未接入，请在对应平台查看。统计不会读取账号密钥。</p></article><article><h3>数据留在你的电脑上</h3><p>面板仅限本机访问，不加载外部图表或字体。接口统计仅保存模型、时间、Token 和状态，不保存提示词、回复正文或 API 密钥。</p></article></section>
+    <footer class="page-footer"><span><i class="dot mint"></i> LOCAL FIRST · PRIVATE BY DESIGN</span><span>DSH OBSERVATORY <b>v1.1</b></span></footer>
+    <div class="toast" id="toast" role="status" hidden></div>
+  </main>
+</body>
+</html>

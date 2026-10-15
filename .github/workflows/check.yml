@@ -7,18 +7,26 @@ permissions:
 jobs:
   syntax:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        node: ['22', '24']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '${{ matrix.node }}'
       - name: Check JavaScript syntax
         run: |
           node --check lazy-api.cjs
           node --check verify-lazy-api.cjs
+          node --check web/app.js
+      - name: Test usage accounting and dashboard
+        run: node --test tests/dashboard.test.cjs
       - name: Parse installer
         shell: pwsh
         run: |
           $parseErrors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'setup.ps1'), [ref]$null, [ref]$parseErrors) | Out-Null
-          if ($parseErrors.Count) { $parseErrors | Write-Error }
+          foreach ($file in @('setup.ps1', 'update-installed.ps1')) {
+            [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $file), [ref]$null, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count) { $parseErrors | Write-Error }
+          }

@@ -18,8 +18,13 @@
 /installation-state.json
 /bridge-state.json
 /bridge.log*
+/bridge-usage.json*
+/dsh-usage-cache.json*
 /logs/
 /validation/
+/.runtime/
+/.local/
+/backups/
 /verification*.json
 
 # Editor and operating-system files

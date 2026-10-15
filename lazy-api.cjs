@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
+const { createDashboard } = require('./lib/dashboard.cjs');
 
 function createBridge(options = {}) {
 const root = __dirname;
@@ -19,6 +20,10 @@ const logPath = path.join(runtimeDir, 'bridge.log');
 let backend = null;
 let starting = null;
 let shuttingDown = false;
+const bootedAt = Date.now();
+const dashboard = createDashboard({ root, runtimeDir, port: frontPort, dshHome: options.dshHome,
+  status: () => ({ backendRunning: backend !== null, starting: starting !== null,
+    uptimeMs: Date.now() - bootedAt, frontPort, backendPort }) });
 
 function log(message) {
   try {
@@ -186,10 +191,16 @@ function json(response, status, body) {
 }
 
 const server = http.createServer(async (request, response) => {
+  if (dashboard.handle(request, response)) return;
   // Local readiness checks must not launch the backend.
   if (request.method === 'GET' && request.url === '/__bridge/health') {
     return json(response, 200, { app: 'antigravity-dsh-lazy-api',
       backendRunning: backend !== null });
+  }
+  const exchange = dashboard.begin(request.url, request.method);
+  if (exchange) {
+    response.once('finish', () => exchange.finish(response.statusCode));
+    response.once('close', () => { if (!response.writableEnded) exchange.finish(response.statusCode, true); });
   }
   try {
     await ensureBackend();
@@ -201,7 +212,11 @@ const server = http.createServer(async (request, response) => {
       path: request.url, method: request.method, headers }, (reply) => {
       response.writeHead(reply.statusCode, cleanHeaders(reply.headers));
       reply.on('error', () => response.destroy());
-      reply.pipe(response);
+      if (exchange) {
+        exchange.setContentType(reply.headers['content-type']);
+        exchange.output.on('error', () => response.destroy());
+        reply.pipe(exchange.output).pipe(response);
+      } else reply.pipe(response);
     });
     upstream.on('error', (error) => {
       log(`Upstream connection error: ${error.code || error.message}`);
@@ -214,7 +229,10 @@ const server = http.createServer(async (request, response) => {
     response.on('close', () => {
       if (!response.writableEnded) upstream.destroy();
     });
-    request.pipe(upstream);
+    if (exchange) {
+      exchange.input.on('error', () => upstream.destroy());
+      request.pipe(exchange.input).pipe(upstream);
+    } else request.pipe(upstream);
   } catch (error) {
     log(`Request could not start backend: ${error.message}`);
     json(response, 503, { error: { type: 'backend_start_error',
@@ -246,6 +264,7 @@ async function close() {
     await exited;
   }
   await closed;
+  await dashboard.close();
 }
 return { server, close };
 }

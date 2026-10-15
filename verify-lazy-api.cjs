@@ -94,6 +94,13 @@ async function chat(extra) {
     assert.equal(call.function.name, 'connection_probe');
     assert.equal(JSON.parse(call.function.arguments).value, 'ping');
     results.push('Tool call returned connection_probe(value=ping)');
+    const statsReply = await request('/dashboard/api/stats?range=all');
+    assert.equal(statsReply.status, 200);
+    const statistics = await statsReply.json();
+    assert(statistics.bridge.totals.calls >= 3);
+    assert(statistics.bridge.totals.measuredCalls >= 2);
+    assert.equal(statistics.quota.available, false);
+    results.push('Dashboard reports real bridge calls and measured tokens; quota stays explicitly unavailable');
   }
   if (isolated) {
     // This PID belongs to the real backend spawned by this isolated bridge.

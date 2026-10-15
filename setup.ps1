@@ -23,6 +23,8 @@ $nodeVersion = & $NodePath --version
 if ($LASTEXITCODE -ne 0 -or $nodeVersion -notmatch '^v(\d+)\.' -or [int]$Matches[1] -lt 22) {
     throw 'Node.js 22 or later is required.'
 }
+& $NodePath -e "if (typeof require('node:zlib').zstdDecompressSync !== 'function') process.exit(1)"
+if ($LASTEXITCODE -ne 0) { throw 'The dashboard needs Zstandard support. Use Node.js 22.15+ or Node.js 24 LTS.' }
 
 $binaryDir = Join-Path $projectDir 'bin'
 $executable = Join-Path $binaryDir 'cli-proxy-api.exe'
@@ -94,3 +96,4 @@ if (-not $NoStart) {
 }
 Write-Output 'Setup complete. Authorize with 01-login.cmd, then configure DSH with http://127.0.0.1:8317/v1.'
 Write-Output 'Read the local API key from access.api-keys in config.yaml. Keep config.yaml and auth/ private.'
+Write-Output 'Local usage dashboard: http://127.0.0.1:8317/dashboard/'
