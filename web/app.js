@@ -14,7 +14,8 @@ const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '
 const text = (id, value) => { $(id).textContent = value; };
 
 function renderTrend(data) {
-  const width = 660, height = 220, left = 43, right = 13, top = 17, bottom = 33;
+  const width = Math.max(280, $('trend-chart').clientWidth);
+  const height = Math.max(220, $('trend-chart').clientHeight), left = 64, right = 20, top = 20, bottom = 40;
   const chartHeight = height - top - bottom, chartWidth = width - left - right;
   const max = Math.max(1, ...data.map((row) => row.totalTokens));
   const scale = 10 ** Math.floor(Math.log10(max));
@@ -23,7 +24,7 @@ function renderTrend(data) {
   let svg = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="每日输入、缓存与输出 Token 使用量">`;
   for (let index = 0; index <= 4; index++) {
     const y = top + index * chartHeight / 4;
-    svg += `<line x1="${left}" x2="${width - right}" y1="${y}" y2="${y}" stroke="#26313e" stroke-dasharray="3 5"/><text x="${left - 10}" y="${y + 3}" text-anchor="end" fill="#546174" font-size="9">${compact(ceiling * (4 - index) / 4)}</text>`;
+    svg += `<line x1="${left}" x2="${width - right}" y1="${y}" y2="${y}" stroke="#354254" stroke-dasharray="3 5"/><text x="${left - 10}" y="${y + 5}" text-anchor="end" fill="#b9c5d4" font-size="13">${compact(ceiling * (4 - index) / 4)}</text>`;
   }
   data.forEach((row, index) => {
     const x = left + slot * index + (slot - barWidth) / 2;
@@ -34,8 +35,10 @@ function renderTrend(data) {
       if (h) svg += `<rect x="${x}" y="${y}" width="${barWidth}" height="${h}" fill="${color}" rx="1"><title>${row.day} · ${label} ${exact(tokens)} Token</title></rect>`;
     }
     if (!row.totalTokens) svg += `<rect x="${x}" y="${y - 2}" width="${barWidth}" height="2" fill="#283444" rx="1"/>`;
-    if (index % Math.max(1, Math.ceil(data.length / 7)) === 0 || index === data.length - 1) {
-      svg += `<text x="${left + slot * (index + .5)}" y="${height - 10}" text-anchor="middle" fill="#68788d" font-size="9">${row.day.slice(5).replace('-', '/')}</text>`;
+    const labelEvery = Math.max(1, Math.ceil(data.length / (width < 450 ? 4 : 7)));
+    const showLast = index === data.length - 1 && index % labelEvery > labelEvery / 2;
+    if (index % labelEvery === 0 || showLast) {
+      svg += `<text x="${left + slot * (index + .5)}" y="${height - 10}" text-anchor="middle" fill="#b9c5d4" font-size="13">${row.day.slice(5).replace('-', '/')}</text>`;
     }
   });
   svg += '</svg>';
@@ -56,7 +59,7 @@ function renderDistribution(models) {
     if (arc) svg += `<circle cx="90" cy="72" r="52" fill="none" stroke="${colors[index]}" stroke-width="11" stroke-dasharray="${Math.max(0, arc - 3)} ${circumference}" stroke-dashoffset="${-offset}" transform="rotate(-90 90 72)"><title>${escape(row.label)} · ${percent(row.value / total)}</title></circle>`;
     offset += arc;
   });
-  svg += `<text x="90" y="72" text-anchor="middle" fill="#e5ebf2" font-size="26" font-family="Bahnschrift,sans-serif">${models.length}</text><text x="90" y="91" text-anchor="middle" fill="#68788d" font-size="8" letter-spacing="1">活跃模型</text></svg>`;
+  svg += `<text x="90" y="72" text-anchor="middle" fill="#f2f5f9" font-size="28" font-family="Segoe UI,sans-serif">${models.length}</text><text x="90" y="94" text-anchor="middle" fill="#b9c5d4" font-size="12">活跃模型</text></svg>`;
   $('model-chart').innerHTML = svg;
   text('distribution-unit', useTokens ? '按 Token' : '按调用次数');
   $('model-legend').innerHTML = shown.length ? shown.map((row, index) => `<div class="legend-row"><svg width="6" height="6" aria-hidden="true"><rect width="6" height="6" rx="2" fill="${colors[index]}"/></svg><span class="legend-name" title="${escape(row.label)}">${escape(row.label)}</span><b>${compact(row.value)}</b><span class="legend-percent">${total ? sharePercent(row.value / total) : '—'}</span></div>`).join('') : '<div class="empty">此时间范围内暂无模型调用</div>';
@@ -178,4 +181,5 @@ $('export-button').addEventListener('click', () => {
   setTimeout(() => { $('toast').hidden = true; }, 3500);
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+new ResizeObserver(() => { if (state.data) renderTrend(state.data[state.source].trend); }).observe($('trend-chart'));
 refresh(); setInterval(() => { if (!document.hidden) refresh(); }, 5000);

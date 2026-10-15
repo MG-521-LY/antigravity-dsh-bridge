@@ -136,6 +136,18 @@ test('dashboard serves real history asynchronously, rejects cross-origin access,
   assert.equal((await fetch(base + '/favicon.ico')).status, 204);
   const forbidden = await fetch(base + '/dashboard/api/stats', { headers: { Origin: 'https://example.com' } });
   assert.equal(forbidden.status, 403);
+  const navigation = { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
+  // Node fetch overwrites Sec-Fetch-Mode; use HTTP to represent browser metadata.
+  const navigationStatus = (route, headers) => new Promise((resolve, reject) => {
+    http.get(base + route, { headers }, (response) => {
+      response.resume(); response.on('end', () => resolve(response.statusCode));
+    }).on('error', reject);
+  });
+  assert.equal(await navigationStatus('/dashboard/', navigation), 200);
+  assert.equal(await navigationStatus('/dashboard/api/stats', navigation), 403);
+  assert.equal(await navigationStatus('/dashboard/', { ...navigation, 'Sec-Fetch-Dest': 'iframe' }), 403);
+  assert.equal(await navigationStatus('/dashboard/', { ...navigation, 'Sec-Fetch-Mode': 'cors' }), 403);
+  assert.equal(await navigationStatus('/dashboard/api/stats', { ...navigation, Origin: 'https://example.com' }), 403);
   let stats;
   for (let i = 0; i < 100; i++) {
     stats = await (await fetch(base + '/dashboard/api/stats?range=all')).json();
