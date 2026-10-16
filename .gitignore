@@ -18,6 +18,9 @@
 /installation-state.json
 /bridge-state.json
 /bridge.log*
+/lifecycle.log*
+/supervisor-lock.json
+/.bridge-maintenance
 /bridge-usage.json*
 /dsh-usage-cache.json*
 /logs/

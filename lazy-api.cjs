@@ -6,6 +6,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const { createDashboard } = require('./lib/dashboard.cjs');
+const { logEvent, errorInfo } = require('./lib/lifecycle.cjs');
 
 function createBridge(options = {}) {
 const root = __dirname;
@@ -20,6 +21,8 @@ const logPath = path.join(runtimeDir, 'bridge.log');
 let backend = null;
 let starting = null;
 let shuttingDown = false;
+let healthFailures = 0, forwarded = 0;
+function notify(message) { if (process.connected) { try { process.send(message, () => {}); } catch {} } }
 const bootedAt = Date.now();
 const dashboard = createDashboard({ root, runtimeDir, port: frontPort, dshHome: options.dshHome,
   status: () => ({ backendRunning: backend !== null, starting: starting !== null,
@@ -35,6 +38,7 @@ function log(message) {
 }
 
 function saveState() {
+  try {
   fs.writeFileSync(statePath, JSON.stringify({
     app: 'antigravity-dsh-lazy-api',
     pid: process.pid,
@@ -43,6 +47,7 @@ function saveState() {
     backendPort,
     updatedAt: new Date().toISOString(),
   }, null, 2));
+  } catch (error) { logEvent(runtimeDir, 'state-write-error', errorInfo(error)); }
 }
 
 function backendReady() {
@@ -133,18 +138,35 @@ function prepareBackendConfig() {
 
 async function ensureBackend() {
   if (starting) return starting;
-  if (backend && backend.exitCode === null && await backendReady()) return;
-  if (shuttingDown) throw new Error('API entry is shutting down');
   starting = (async () => {
+    if (shuttingDown) throw new Error('API entry is shutting down');
+    if (backend && backend.exitCode === null) {
+      if (await backendReady()) { healthFailures = 0; return; }
+      healthFailures++;
+      if (healthFailures < 3 || forwarded > 0) throw new Error('Backend is running but not responding; retry shortly');
+      logEvent(runtimeDir, 'backend-unresponsive', { pid: backend.pid, healthFailures });
+      const unhealthy = backend;
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Owned backend did not stop')), 3000);
+        unhealthy.once('exit', () => { clearTimeout(timeout); resolve(); });
+        unhealthy.kill();
+      });
+    }
     // Never reuse or stop a process belonging to another program on this port.
     if (backend) throw new Error('Backend is running but not responding; retry shortly');
     if (await backendReady()) throw new Error(`Port ${backendPort} is already occupied`);
     const config = prepareBackendConfig();
     const child = spawn(backendExecutable,
       ['-config', config, '-local-model'], {
-        cwd: runtimeDir, windowsHide: true, stdio: 'ignore',
+        cwd: runtimeDir, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'],
       });
     backend = child;
+    healthFailures = 0;
+    notify({ type: 'backend-started', pid: child.pid });
+    child.stderr?.on('data', chunk => {
+      if (/out of memory|allocation failed|cannot allocate|VirtualAlloc|fatal error/i.test(chunk.toString()))
+        logEvent(runtimeDir, 'backend-fatal-diagnostic', { pid: child.pid, memoryFailure: /memory|alloc/i.test(chunk.toString()) });
+    });
     let startError = null;
     child.on('error', (error) => {
       startError = error;
@@ -156,6 +178,8 @@ async function ensureBackend() {
       if (backend === child) backend = null;
       saveState();
       log(`Backend exited: code=${code}, signal=${signal}`);
+      logEvent(runtimeDir, 'backend-exit', { pid: child.pid, code, signal });
+      notify({ type: 'backend-stopped' });
     });
     saveState();
     log(`Backend starting, pid=${child.pid}`);
@@ -218,6 +242,8 @@ const server = http.createServer(async (request, response) => {
         reply.pipe(exchange.output).pipe(response);
       } else reply.pipe(response);
     });
+    forwarded++;
+    upstream.once('close', () => { forwarded--; });
     upstream.on('error', (error) => {
       log(`Upstream connection error: ${error.code || error.message}`);
       if (response.headersSent) response.destroy();
@@ -257,6 +283,7 @@ async function close() {
   if (shuttingDown) return;
   shuttingDown = true;
   const closed = new Promise((resolve) => server.close(resolve));
+  const closeDeadline = setTimeout(() => server.closeAllConnections(), 3000);
   const child = backend;
   if (child) {
     const exited = new Promise((resolve) => child.once('exit', resolve));
@@ -264,6 +291,7 @@ async function close() {
     await exited;
   }
   await closed;
+  clearTimeout(closeDeadline);
   await dashboard.close();
 }
 return { server, close };
@@ -272,12 +300,19 @@ return { server, close };
 if (require.main === module) {
   const bridge = createBridge();
   bridge.server.on('error', (error) => process.exit(error.code === 'EADDRINUSE' ? 0 : 1));
-  const shutdown = () => bridge.close().catch(() => { process.exitCode = 1; });
+  const shutdown = () => bridge.close().catch(error => { logEvent(__dirname, 'shutdown-error', errorInfo(error)); process.exitCode = 1; });
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
   process.on('uncaughtException', (error) => {
-    console.error(error.message);
+    logEvent(__dirname, 'entry-uncaught-exception', errorInfo(error));
+    process.exitCode = 1;
     shutdown();
   });
+  process.on('unhandledRejection', (error) => {
+    logEvent(__dirname, 'entry-unhandled-rejection', errorInfo(error));
+    process.exitCode = 1; shutdown();
+  });
+  process.on('exit', code => logEvent(__dirname, 'entry-process-exit', { code }));
+  process.on('disconnect', shutdown);
 }
 module.exports = { createBridge };

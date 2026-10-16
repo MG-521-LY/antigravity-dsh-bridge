@@ -18,15 +18,16 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check lazy-api.cjs
+          node --check bridge-supervisor.cjs
           node --check verify-lazy-api.cjs
           node --check web/app.js
       - name: Test usage accounting and dashboard
-        run: node --test tests/dashboard.test.cjs
+        run: node --test --test-concurrency=1 tests/dashboard.test.cjs tests/lifecycle.test.cjs
       - name: Parse installer
         shell: pwsh
         run: |
           $parseErrors = $null
-          foreach ($file in @('setup.ps1', 'update-installed.ps1')) {
+          foreach ($file in @('setup.ps1', 'update-installed.ps1', 'cleanup-backend.ps1')) {
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $file), [ref]$null, [ref]$parseErrors) | Out-Null
             if ($parseErrors.Count) { $parseErrors | Write-Error }
           }

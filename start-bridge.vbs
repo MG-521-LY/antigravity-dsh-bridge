@@ -1,5 +1,5 @@
 Option Explicit
-Dim shell, files, folder, runtime, command, reader
+Dim shell, files, folder, runtime, command, reader, exitCode, pauseMs
 Set shell = CreateObject("WScript.Shell")
 Set files = CreateObject("Scripting.FileSystemObject")
 folder = files.GetParentFolderName(WScript.ScriptFullName)
@@ -15,5 +15,14 @@ If Not files.FileExists(runtime) Then
   WScript.Quit 1
 End If
 shell.CurrentDirectory = folder
-command = Chr(34) & runtime & Chr(34) & " " & Chr(34) & folder & "\lazy-api.cjs" & Chr(34)
-shell.Run command, 0, False
+command = Chr(34) & runtime & Chr(34) & " --max-old-space-size=32 --max-semi-space-size=2 " & Chr(34) & folder & "\bridge-supervisor.cjs" & Chr(34)
+pauseMs = 1000
+Do
+  If files.FileExists(folder & "\.bridge-maintenance") Then WScript.Quit 0
+  exitCode = shell.Run(command, 0, True)
+  If exitCode = 0 Then WScript.Quit 0
+  If files.FileExists(folder & "\.bridge-maintenance") Then WScript.Quit 0
+  WScript.Sleep pauseMs
+  If pauseMs < 30000 Then pauseMs = pauseMs * 2
+  If pauseMs > 30000 Then pauseMs = 30000
+Loop
