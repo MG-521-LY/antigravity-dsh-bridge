@@ -27,9 +27,9 @@ if (-not $NodePath) {
     else { $NodePath = (Get-Command node.exe -ErrorAction Stop).Source }
 }
 $NodePath = (Resolve-Path -LiteralPath $NodePath).Path
-$files = @('lazy-api.cjs','bridge-supervisor.cjs','cleanup-backend.ps1','start-bridge.vbs','01-login.cmd','02-start-api.cmd',
+$files = @('lazy-api.cjs','bridge-supervisor.cjs','cleanup-backend.ps1','start-bridge.vbs','memory-status.vbs','01-login.cmd','02-start-api.cmd',
     'setup.ps1','config.example.yaml','verify-lazy-api.cjs','README.md','LICENSE','.gitignore','.gitattributes',
-    'lib\usage.cjs','lib\dashboard.cjs','lib\dsh-reader.cjs','lib\lifecycle.cjs',
+    'lib\usage.cjs','lib\dashboard.cjs','lib\dsh-reader.cjs','lib\lifecycle.cjs','lib\memory.cjs',
     'web\index.html','web\style.css','web\app.js','tests\dashboard.test.cjs','tests\lifecycle.test.cjs')
 foreach ($relative in $files) {
     if (-not (Test-Path -LiteralPath (Join-Path $sourceDir $relative))) { throw "Missing source file: $relative" }

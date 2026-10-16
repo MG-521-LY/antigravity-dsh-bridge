@@ -25,6 +25,7 @@ let healthFailures = 0, forwarded = 0;
 function notify(message) { if (process.connected) { try { process.send(message, () => {}); } catch {} } }
 const bootedAt = Date.now();
 const dashboard = createDashboard({ root, runtimeDir, port: frontPort, dshHome: options.dshHome,
+  memoryProbe: options.memoryProbe,
   status: () => ({ backendRunning: backend !== null, starting: starting !== null,
     uptimeMs: Date.now() - bootedAt, frontPort, backendPort }) });
 

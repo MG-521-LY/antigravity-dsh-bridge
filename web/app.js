@@ -124,7 +124,8 @@ function render() {
   const scan = state.data.dsh.scan;
   let notice = isDsh ? `只读分析 ${scan.files} 份本机会话 · 已排除 ${exact(scan.inheritedSkipped)} 条继承步骤` : '从安装监控功能后开始记录 · 与 DSH 历史用量分别统计';
   let warning = false;
-  if (isDsh && scan.scanning) { notice = `正在扫描本机会话${scan.progress ? ` ${scan.progress.scanned} / ${scan.progress.files}` : ''}，完成后自动更新…`; }
+  if (isDsh && scan.memoryPaused) { notice = scan.memoryAvailable ? '系统内存不足，已暂停用量扫描以减少开销；显示上次结果。模型接口继续运行。' : '暂时无法检查系统内存，已暂停用量扫描；模型接口继续运行。'; warning = true; }
+  else if (isDsh && scan.scanning) { notice = `正在扫描本机会话${scan.progress ? ` ${scan.progress.scanned} / ${scan.progress.files}` : ''}，完成后自动更新…`; }
   else if (isDsh && !scan.exists) { notice = '未找到 DSH 会话目录，请确认 DSH_HOME 或默认 ~/.dsh 是否正确。'; warning = true; }
   else if (isDsh && (scan.errors || scan.partial || scan.unsupported || scan.skippedSeeds || scan.scanError)) {
     notice += ` · ${scan.errors} 份读取失败 / ${scan.partial} 份不完整 / ${scan.unsupported} 份格式未支持 / ${scan.skippedSeeds} 份继承边界缺失`; warning = true;

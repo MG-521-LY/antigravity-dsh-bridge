@@ -171,6 +171,7 @@ test('dashboard serves real history asynchronously, rejects cross-origin access,
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port, base = `http://127.0.0.1:${port}`;
   dashboard = createDashboard({ root: path.join(__dirname, '..'), runtimeDir: dir, port,
+    memoryProbe: async () => ({available:true,paused:false}),
     dshHome: home, status: () => ({ backendRunning: false }) });
   t.after(async () => { await dashboard.close(); await new Promise((resolve) => server.close(resolve)); });
   const page = await fetch(base + '/dashboard/'); assert.equal(page.status, 200);

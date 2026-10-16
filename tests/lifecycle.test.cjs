@@ -57,19 +57,50 @@ test('fatal error diagnostics omit messages which may contain request content',(
 
 test('statistics process failure leaves the API entry healthy and reports stale data', async t=>{
   const dir=temporary(t), front=await port(), originalFork=cp.fork;
+  const fixture=path.join(dir,'crash-reader.cjs');
+  fs.writeFileSync(fixture,"process.once('message',()=>process.exit(17))");
   let reader;
-  cp.fork=(file,args,options)=>{reader=originalFork(file,args,options);return reader;};
+  cp.fork=(file,args,options)=>{reader=originalFork(fixture,args,options);return reader;};
   delete require.cache[require.resolve('../lib/dashboard.cjs')];
   delete require.cache[require.resolve('../lazy-api.cjs')];
-  const bridge=require('../lazy-api.cjs').createBridge({frontPort:front,backendPort:await port(),runtimeDir:dir,dshHome:dir});
+  const bridge=require('../lazy-api.cjs').createBridge({frontPort:front,backendPort:await port(),runtimeDir:dir,dshHome:dir,memoryProbe:async()=>({available:true,paused:false})});
   t.context.cleanup=async()=>{await bridge.close();cp.fork=originalFork;delete require.cache[require.resolve('../lib/dashboard.cjs')];delete require.cache[require.resolve('../lazy-api.cjs')];};
   await once(bridge.server,'listening');
   const stats=async()=>await (await fetch(`http://127.0.0.1:${front}/dashboard/api/stats`)).json();
-  await stats(); assert(reader?.pid);
-  await waitFor(async()=>Boolean((await stats()).dsh.scan.completedAt));
-  const exited=once(reader,'exit'); reader.kill(); await exited;
+  await stats(); await waitFor(()=>Boolean(reader?.pid));
   await waitFor(async()=>(await stats()).dsh.scan.scanError);
   const health=await fetch(`http://127.0.0.1:${front}/__bridge/health`);
   assert.equal(health.status,200);assert.equal((await health.json()).backendRunning,false);
   assert(fs.readFileSync(path.join(dir,'lifecycle.log'),'utf8').includes('statistics-exit'));
+});
+
+test('low physical memory, low commit headroom, and failed checks pause optional scanning', async t=>{
+  const {assessMemory}=require('../lib/memory.cjs');
+  assert.equal(assessMemory({freePhysicalKB:3*1024*1024,freeVirtualKB:256*1024}).paused,true);
+  assert.equal(assessMemory({freePhysicalKB:500*1024,freeVirtualKB:8*1024*1024}).paused,true);
+  assert.equal(assessMemory(null).paused,true);
+  assert.equal(assessMemory({freePhysicalKB:3*1024*1024,freeVirtualKB:8*1024*1024}).paused,false);
+  const dir=temporary(t), front=await port();
+  const bridge=require('../lazy-api.cjs').createBridge({frontPort:front,backendPort:await port(),runtimeDir:dir,dshHome:dir,
+    memoryProbe:async()=>assessMemory({freePhysicalKB:3*1024*1024,freeVirtualKB:256*1024})});
+  t.context.cleanup=()=>bridge.close();await once(bridge.server,'listening');
+  const stats=async()=>await (await fetch(`http://127.0.0.1:${front}/dashboard/api/stats`)).json();
+  await stats();await waitFor(async()=>(await stats()).dsh.scan.memoryPaused);
+  assert.equal((await stats()).dsh.scan.scanning,false);
+  assert.equal((await fetch(`http://127.0.0.1:${front}/__bridge/health`)).status,200);
+});
+
+test('a successful statistics scan releases its process and keeps the completed result', async t=>{
+  const dir=temporary(t), front=await port(), originalFork=cp.fork;
+  let reader;
+  cp.fork=(...args)=>{reader=originalFork(...args);return reader;};
+  delete require.cache[require.resolve('../lib/dashboard.cjs')];delete require.cache[require.resolve('../lazy-api.cjs')];
+  const bridge=require('../lazy-api.cjs').createBridge({frontPort:front,backendPort:await port(),runtimeDir:dir,dshHome:dir,
+    memoryProbe:async()=>({available:true,paused:false})});
+  t.context.cleanup=async()=>{await bridge.close();cp.fork=originalFork;delete require.cache[require.resolve('../lib/dashboard.cjs')];delete require.cache[require.resolve('../lazy-api.cjs')];};
+  await once(bridge.server,'listening');
+  const stats=async()=>await (await fetch(`http://127.0.0.1:${front}/dashboard/api/stats`)).json();
+  await stats();await waitFor(()=>reader?.exitCode===0);
+  const result=await stats();assert(result.dsh.scan.completedAt);assert.equal(result.dsh.scan.scanError,false);
+  assert.equal(result.dsh.scan.scanning,false);
 });
